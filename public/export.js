@@ -276,19 +276,19 @@ async function exportarHTML() {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; padding: 2rem; }
         .container { max-width: 1200px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .header { background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; }
+        .header { background: linear-gradient(135deg, #05668D 0%, #427AA1 100%); color: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; }
         h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-        h2 { color: #111827; margin: 2rem 0 1rem 0; font-size: 1.5rem; padding-left: 0.5rem; border-left: 4px solid #3b82f6; }
+        h2 { color: #1a1a1a; margin: 2rem 0 1rem 0; font-size: 1.5rem; padding-left: 0.5rem; border-left: 4px solid #05668D; }
         .subtitle { opacity: 0.9; }
         .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-        .kpi-card { background: #f3f4f6; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #3b82f6; }
+        .kpi-card { background: #e8e8e6; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #05668D; }
         .kpi-label { font-size: 0.875rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
         .kpi-value { font-size: 1.875rem; font-weight: 700; color: #111827; margin-top: 0.5rem; }
         .chart-container { background: #f9fafb; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; }
         .chart-container img { width: 100%; height: auto; border-radius: 4px; }
         .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
-        th { background: #3b82f6; color: white; padding: 1rem; text-align: left; font-weight: 600; }
+        th { background: #05668D; color: white; padding: 1rem; text-align: left; font-weight: 600; }
         td { padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; }
         tr:hover { background: #f9fafb; }
         .footer { text-align: center; color: #6b7280; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e5e7eb; }
@@ -840,15 +840,15 @@ async function exportarTemporalHTML() {
     <title>Análisis Temporal - ${nivelTemporalActual.toUpperCase()}</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f9fafb; }
-        .header { background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; }
+        .header { background: linear-gradient(135deg, #05668D 0%, #427AA1 100%); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; }
         .chart-container { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .chart-container img { width: 100%; height: auto; }
         table { width: 100%; background: white; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        th { background: #3b82f6; color: white; padding: 12px; text-align: left; }
+        th { background: #05668D; color: white; padding: 12px; text-align: left; }
         td { padding: 12px; border-bottom: 1px solid #e5e7eb; }
         tr:hover { background: #f9fafb; }
         .total { background: #f0f9ff; padding: 20px; border-radius: 12px; margin-top: 20px; text-align: center; }
-        .total-value { font-size: 32px; font-weight: bold; color: #3b82f6; }
+        .total-value { font-size: 32px; font-weight: bold; color: #05668D; }
     </style>
 </head>
 <body>

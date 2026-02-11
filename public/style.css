@@ -8,22 +8,27 @@
     box-sizing: border-box;
 }
 
+/* Paleta: Baltic Blue, Rich Cerulean, Silver, Forest Green, Light Green */
 :root {
-    --primary: #3b82f6;
-    --primary-dark: #2563eb;
-    --purple: #8b5cf6;
-    --success: #10b981;
-    --danger: #ef4444;
-    --warning: #f59e0b;
-    --text-primary: #111827;
-    --text-secondary: #6b7280;
-    --gray-50: #f9fafb;
-    --gray-100: #f3f4f6;
-    --gray-200: #e5e7eb;
-    --gray-300: #d1d5db;
-    --gray-900: #111827;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --primary: #05668D;           /* Baltic Blue */
+    --primary-dark: #044a6b;
+    --cerulean: #427AA1;          /* Rich Cerulean */
+    --purple: #427AA1;            /* Reutilizado como acento (Cerulean) */
+    --success: #208B3A;           /* Forest Green */
+    --success-light: #96E072;     /* Light Green */
+    --danger: #b91c1c;
+    --warning: #208B3A;
+    --silver: #C2C0BA;            /* Silver */
+    --text-primary: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --gray-50: #f5f5f4;
+    --gray-100: #e8e8e6;
+    --gray-200: #C2C0BA;
+    --gray-300: #a8a6a0;
+    --gray-400: #8c8a84;
+    --gray-900: #1a1a1a;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
 }
 
@@ -55,7 +60,7 @@ body {
     left: 0;
     width: 280px;
     height: 100vh;
-    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    background: linear-gradient(180deg, #05668D 0%, #044a6b 100%);
     color: white;
     display: flex;
     flex-direction: column;
@@ -94,7 +99,8 @@ body {
 .logo-icon {
     width: 40px;
     height: 40px;
-    color: white;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .logo-text {
@@ -132,9 +138,9 @@ body {
 }
 
 .nav-item.active {
-    background: rgba(59, 130, 246, 0.15);
+    background: rgba(66, 122, 161, 0.25);
     color: white;
-    border-left-color: var(--primary);
+    border-left-color: var(--success-light);
     font-weight: 600;
 }
 
@@ -256,7 +262,7 @@ select.form-input {
     align-items: center;
     gap: 0.5rem;
     padding: 0.875rem 1.5rem;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--cerulean) 100%);
     color: white;
     border: none;
     border-radius: 8px;
@@ -308,9 +314,9 @@ select.form-input {
     align-items: center;
     gap: 0.25rem;
     padding: 0.5rem 1rem;
-    background: rgba(59, 130, 246, 0.1);
+    background: rgba(5, 102, 141, 0.12);
     color: var(--primary);
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(5, 102, 141, 0.25);
     border-radius: 6px;
     font-size: 0.875rem;
     font-weight: 500;
@@ -320,7 +326,7 @@ select.form-input {
 }
 
 .btn-edit:hover {
-    background: rgba(59, 130, 246, 0.2);
+    background: rgba(5, 102, 141, 0.2);
     border-color: var(--primary);
 }
 
@@ -394,11 +400,11 @@ select.form-input {
     border-color: var(--primary);
     color: var(--primary);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    box-shadow: 0 4px 12px rgba(5, 102, 141, 0.2);
 }
 
 .btn-nivel.active {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--cerulean) 100%);
     color: white;
     border-color: var(--primary);
 }
@@ -859,7 +865,53 @@ tbody tr:hover {
 }
 
 .hidden {
+    display: none !important;
+}
+
+/* Banner de alertas de stock mínimo */
+.alertas-banner {
+    background: linear-gradient(90deg, rgba(185, 28, 28, 0.12) 0%, rgba(185, 28, 28, 0.04) 100%);
+    border-left: 4px solid var(--danger);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    border-radius: 8px;
+    animation: fadeInUp 0.3s ease-out;
+}
+
+.alertas-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.alertas-banner-icon {
+    font-size: 1.5rem;
+}
+
+.alertas-banner-btn {
+    margin-left: auto;
+    padding: 0.5rem 1rem;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.alertas-banner-btn:hover {
+    background: #991b1b;
+}
+
+/* Ocultar elementos solo para no-admin (mostrar para admin) */
+.nav-admin-only {
     display: none;
+}
+
+body.role-administrador .nav-admin-only {
+    display: flex;
 }
 
 /* ============================================

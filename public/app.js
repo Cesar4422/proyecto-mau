@@ -30,31 +30,36 @@ function showSection(section) {
     const navItems = document.querySelectorAll('.nav-item');
     navItems.forEach(item => item.classList.remove('active'));
     
-    if (section === 'crud') {
-        document.getElementById('crud-section').style.display = 'block';
-        navItems[0].classList.add('active');
+    navItems.forEach(item => {
+        if (item.getAttribute('data-section') === section) item.classList.add('active');
+    });
+    
+    const el = document.getElementById(section + '-section');
+    if (el) el.style.display = 'block';
+    
+    if (section === 'panel') {
+        loadDashboardMetricas();
+        loadPanelAlertas();
+    } else if (section === 'crud') {
         renderTable();
+    } else if (section === 'movimientos') {
+        loadProductosParaMovimientos();
+        loadMovimientos();
+    } else if (section === 'pedidos') {
+        loadProductosParaPedidos();
+        loadPedidos();
+    } else if (section === 'reglas') {
+        loadReglasAsignacion();
     } else if (section === 'dashboard') {
-        document.getElementById('dashboard-section').style.display = 'block';
-        navItems[1].classList.add('active');
         loadDashboardData();
         loadAlertasBajoStock();
         loadProductosEstrella();
     } else if (section === 'sucursales') {
-        document.getElementById('sucursales-section').style.display = 'block';
-        navItems[2].classList.add('active');
         renderSucursalesTable();
     } else if (section === 'categorias') {
-        document.getElementById('categorias-section').style.display = 'block';
-        navItems[3].classList.add('active');
         renderCategoriasTable();
     } else if (section === 'analisis-temporal') {
-        document.getElementById('analisis-temporal-section').style.display = 'block';
-        navItems[4].classList.add('active');
-        // Cargar análisis temporal por defecto (mes)
-        setTimeout(() => {
-            loadAnalisisTemporal('mes');
-        }, 100);
+        setTimeout(() => loadAnalisisTemporal('mes'), 100);
     }
 }
 
@@ -62,11 +67,23 @@ function showSection(section) {
 // Funciones CRUD (Backend Real)
 // ================================
 
+let busquedaProductos = { q: '', categoria_id: '' };
+
+function aplicarBusquedaProductos() {
+    const q = document.getElementById('buscar-producto');
+    const cat = document.getElementById('filtro-categoria');
+    busquedaProductos.q = (q && q.value) ? q.value.trim() : '';
+    busquedaProductos.categoria_id = (cat && cat.value) ? cat.value : '';
+    renderTable();
+}
+
 async function renderTable() {
     try {
-        const response = await fetch('/api/productos', {
-            credentials: 'include'
-        });
+        const params = new URLSearchParams();
+        if (busquedaProductos.q) params.set('q', busquedaProductos.q);
+        if (busquedaProductos.categoria_id) params.set('categoria_id', busquedaProductos.categoria_id);
+        const url = '/api/productos' + (params.toString() ? '?' + params.toString() : '');
+        const response = await fetch(url, { credentials: 'include' });
         const productos = await response.json();
         
         const tbody = document.querySelector('#product-table tbody');
@@ -75,7 +92,7 @@ async function renderTable() {
         if (productos.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    <td colspan="8" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
                         <svg style="width: 64px; height: 64px; margin: 0 auto 1rem; opacity: 0.3;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>
                             <line x1="12" y1="8" x2="12" y2="12"/>
@@ -88,47 +105,41 @@ async function renderTable() {
             return;
         }
 
+        const categoriaColores = {
+            'Electrónica': { bg: 'rgba(5, 102, 141, 0.12)', color: '#05668D' },
+            'Hogar': { bg: 'rgba(66, 122, 161, 0.12)', color: '#427AA1' },
+            'Línea Blanca': { bg: 'rgba(32, 139, 58, 0.12)', color: '#208B3A' },
+            'Muebles': { bg: 'rgba(150, 224, 114, 0.25)', color: '#208B3A' },
+            'Deportes': { bg: 'rgba(5, 102, 141, 0.18)', color: '#044a6b' },
+            'Juguetería': { bg: 'rgba(150, 224, 114, 0.2)', color: '#208B3A' },
+            'Ferretería': { bg: 'rgba(194, 192, 186, 0.4)', color: '#5a5a5a' },
+            'Videojuegos': { bg: 'rgba(66, 122, 161, 0.18)', color: '#427AA1' },
+            'Papelería': { bg: 'rgba(32, 139, 58, 0.15)', color: '#208B3A' },
+            'Automotriz': { bg: 'rgba(5, 102, 141, 0.15)', color: '#05668D' },
+            'Mascotas': { bg: 'rgba(150, 224, 114, 0.22)', color: '#208B3A' },
+            'Zapatería': { bg: 'rgba(66, 122, 161, 0.15)', color: '#427AA1' }
+        };
+
         productos.forEach(p => {
-            // Obtener nombre de la categoría
             const categoriaNombre = p.categoria_nombre || 'Sin categoría';
-            
-            // Asignar color según la categoría
-            const categoriaColores = {
-                'Electrónica': { bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' },
-                'Hogar': { bg: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6' },
-                'Línea Blanca': { bg: 'rgba(16, 185, 129, 0.1)', color: '#10b981' },
-                'Muebles': { bg: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' },
-                'Deportes': { bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' },
-                'Juguetería': { bg: 'rgba(236, 72, 153, 0.1)', color: '#ec4899' },
-                'Ferretería': { bg: 'rgba(107, 114, 128, 0.1)', color: '#6b7280' },
-                'Videojuegos': { bg: 'rgba(168, 85, 247, 0.1)', color: '#a855f7' },
-                'Papelería': { bg: 'rgba(34, 197, 94, 0.1)', color: '#22c55e' },
-                'Automotriz': { bg: 'rgba(20, 184, 166, 0.1)', color: '#14b8a6' },
-                'Mascotas': { bg: 'rgba(251, 146, 60, 0.1)', color: '#fb923c' },
-                'Zapatería': { bg: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }
-            };
-            
-            const catStyle = categoriaColores[categoriaNombre] || { bg: 'rgba(156, 163, 175, 0.1)', color: '#9ca3af' };
+            const catStyle = categoriaColores[categoriaNombre] || { bg: 'rgba(194, 192, 186, 0.3)', color: '#5a5a5a' };
+            const ubicacion = [p.pasillo, p.estante, p.nivel].filter(Boolean).join(' / ') || '—';
+            const puntoReorden = p.punto_reorden ?? 5;
             
             tbody.innerHTML += `
                 <tr>
                     <td><strong>#${p.id}</strong></td>
+                    <td>${(p.codigo || '—')}</td>
                     <td>${p.nombre}</td>
                     <td>
-                        <span style="
-                            background: ${catStyle.bg};
-                            color: ${catStyle.color};
-                            padding: 0.375rem 0.75rem;
-                            border-radius: 6px;
-                            font-size: 0.875rem;
-                            font-weight: 500;
-                        ">${categoriaNombre}</span>
+                        <span style="background: ${catStyle.bg}; color: ${catStyle.color}; padding: 0.375rem 0.75rem; border-radius: 6px; font-size: 0.875rem; font-weight: 500;">${categoriaNombre}</span>
                     </td>
+                    <td style="font-size: 0.875rem;">${ubicacion}</td>
                     <td><strong>$${parseFloat(p.precio_unitario).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong></td>
                     <td>
                         <span style="
-                            background: ${(p.stock || 0) < 5 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)'};
-                            color: ${(p.stock || 0) < 5 ? '#ef4444' : '#10b981'};
+                            background: ${(p.stock || 0) < puntoReorden ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)'};
+                            color: ${(p.stock || 0) < puntoReorden ? '#b91c1c' : '#208B3A'};
                             padding: 0.375rem 0.75rem;
                             border-radius: 6px;
                             font-size: 0.875rem;
@@ -136,20 +147,8 @@ async function renderTable() {
                         ">${p.stock || 0}</span>
                     </td>
                     <td>
-                        <button class="btn-edit" onclick="prepareEdit(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.categoria_id}, ${p.precio_unitario}, ${p.stock || 0})">
-                            <svg style="width: 14px; height: 14px; display: inline; vertical-align: middle; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                            Editar
-                        </button>
-                        <button class="btn-delete" onclick="deleteProduct(${p.id})">
-                            <svg style="width: 14px; height: 14px; display: inline; vertical-align: middle; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"/>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                            Eliminar
-                        </button>
+                        <button class="btn-edit" onclick="prepareEdit(${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}', ${p.categoria_id}, ${p.precio_unitario}, ${p.stock ?? 0}, '${(p.codigo || '').replace(/'/g, "\\'")}', ${puntoReorden}, '${(p.pasillo || '').replace(/'/g, "\\'")}', '${(p.estante || '').replace(/'/g, "\\'")}', '${(p.nivel || '').replace(/'/g, "\\'")}')">Editar</button>
+                        <button class="btn-delete" onclick="deleteProduct(${p.id})">Eliminar</button>
                     </td>
                 </tr>
             `;
@@ -158,6 +157,33 @@ async function renderTable() {
         console.error("Error al renderizar tabla:", err);
         mostrarNotificacion('Error al cargar los productos', 'danger');
     }
+}
+
+function prepareEdit(id, nombre, categoria_id, precio_unitario, stock, codigo, punto_reorden, pasillo, estante, nivel) {
+    editMode = true;
+    editId = id;
+    document.getElementById('nombre').value = nombre || '';
+    document.getElementById('categoria').value = categoria_id || '';
+    document.getElementById('precio').value = precio_unitario != null ? precio_unitario : '';
+    document.getElementById('stock').value = stock != null ? stock : 0;
+    document.getElementById('codigo').value = codigo || '';
+    document.getElementById('punto_reorden').value = punto_reorden != null ? punto_reorden : 5;
+    document.getElementById('pasillo').value = pasillo || '';
+    document.getElementById('estante').value = estante || '';
+    document.getElementById('nivel').value = nivel || '';
+    const btn = document.querySelector('#product-form button[type="submit"]');
+    if (btn) btn.textContent = 'Actualizar Producto';
+    document.getElementById('product-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function resetForm() {
+    editMode = false;
+    editId = null;
+    document.getElementById('product-form').reset();
+    document.getElementById('stock').value = 0;
+    document.getElementById('punto_reorden').value = 5;
+    const btn = document.querySelector('#product-form button[type="submit"]');
+    if (btn) btn.textContent = 'Guardar Producto';
 }
 
 // ================================
@@ -195,11 +221,11 @@ async function renderSucursalesTable() {
             };
             
             const regionTextColor = {
-                'Norte': '#3b82f6',
-                'Sur': '#ef4444',
-                'Centro': '#10b981',
-                'Occidente': '#f59e0b',
-                'Oriente': '#8b5cf6'
+                'Norte': '#05668D',
+                'Sur': '#208B3A',
+                'Centro': '#96E072',
+                'Occidente': '#427AA1',
+                'Oriente': '#044a6b'
             };
             
             tbody.innerHTML += `
@@ -420,20 +446,246 @@ async function deleteCategoria(id) {
 
 async function loadCategoriasSelect() {
     try {
-        const response = await fetch('/api/categorias', {
-            credentials: 'include'
-        });
+        const response = await fetch('/api/categorias', { credentials: 'include' });
         const categorias = await response.json();
-        
+        const opts = '<option value="">Selecciona una categoría</option>' + categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
         const select = document.getElementById('categoria');
-        if (select) {
-            select.innerHTML = '<option value="">Selecciona una categoría</option>';
-            categorias.forEach(c => {
-                select.innerHTML += `<option value="${c.id}">${c.nombre}</option>`;
+        const filtro = document.getElementById('filtro-categoria');
+        if (select) { select.innerHTML = opts; }
+        if (filtro) { filtro.innerHTML = '<option value="">Todas</option>' + categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join(''); }
+    } catch (err) {
+        console.error("Error al cargar categorías:", err);
+    }
+}
+
+// ================================
+// PANEL PRINCIPAL: MÉTRICAS Y ALERTAS
+// ================================
+
+async function loadDashboardMetricas() {
+    const agotadosEl = document.getElementById('metricas-agotados');
+    const pendientesEl = document.getElementById('metricas-pendientes');
+    const ocupacionEl = document.getElementById('metricas-ocupacion');
+    const unidadesEl = document.getElementById('metricas-unidades');
+    const setMetricas = (data) => {
+        if (agotadosEl) agotadosEl.textContent = data.productos_agotados ?? 0;
+        if (pendientesEl) pendientesEl.textContent = data.ordenes_pendientes_surtir ?? 0;
+        if (ocupacionEl) ocupacionEl.textContent = data.ocupacion_almacen || '—';
+        if (unidadesEl) unidadesEl.textContent = (data.total_unidades ?? 0) + ' unidades';
+    };
+    try {
+        const response = await fetch('/api/dashboard/metricas', { credentials: 'include' });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) {
+            setMetricas(data);
+        } else {
+            setMetricas({
+                productos_agotados: 0,
+                ordenes_pendientes_surtir: 0,
+                ocupacion_almacen: data.error || 'Inicia sesión',
+                total_unidades: 0
             });
         }
     } catch (err) {
-        console.error("Error al cargar categorías:", err);
+        console.error('Error al cargar métricas:', err);
+        setMetricas({
+            productos_agotados: 0,
+            ordenes_pendientes_surtir: 0,
+            ocupacion_almacen: 'Error de conexión',
+            total_unidades: 0
+        });
+    }
+}
+
+async function loadPanelAlertas() {
+    try {
+        const response = await fetch('/api/alertas/bajo-stock', { credentials: 'include' });
+        const alertas = await response.json();
+        const container = document.getElementById('panel-alertas-bajo-stock');
+        const banner = document.getElementById('alertas-banner');
+        if (!container) return;
+        if (alertas.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-secondary);">✅ Ningún producto bajo punto de reorden.</p>';
+            if (banner) banner.classList.add('hidden');
+            return;
+        }
+        if (banner) {
+            banner.classList.remove('hidden');
+            const text = document.getElementById('alertas-banner-text');
+            if (text) text.textContent = alertas.length + ' producto(s) bajo punto de reorden';
+        }
+        container.innerHTML = alertas.map(p => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid rgba(0,0,0,0.06);">
+                <div>
+                    <strong>${p.nombre}</strong> ${p.codigo ? '(' + p.codigo + ')' : ''}
+                    <div style="font-size: 0.875rem; color: var(--text-secondary);">${p.categoria || 'Sin categoría'} · Punto reorden: ${p.punto_reorden ?? 5}</div>
+                </div>
+                <span style="background: #b91c1c; color: white; padding: 0.35rem 0.75rem; border-radius: 6px; font-weight: 700;">${p.stock}</span>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error('Error al cargar alertas panel:', err);
+    }
+}
+
+// ================================
+// MOVIMIENTOS (ENTRADAS / SALIDAS)
+// ================================
+
+async function loadProductosParaMovimientos() {
+    try {
+        const res = await fetch('/api/productos', { credentials: 'include' });
+        const productos = await res.json();
+        const sel = document.getElementById('mov-producto');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Seleccionar producto</option>' + productos.map(p => `<option value="${p.id}">${p.nombre} ${p.codigo ? '(' + p.codigo + ')' : ''} - Stock: ${p.stock ?? 0}</option>`).join('');
+    } catch (err) {
+        console.error('Error cargar productos movimientos:', err);
+    }
+}
+
+async function loadMovimientos() {
+    try {
+        const res = await fetch('/api/movimientos?limit=50', { credentials: 'include' });
+        const rows = await res.json();
+        const tbody = document.getElementById('movimientos-tbody');
+        if (!tbody) return;
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No hay movimientos</td></tr>';
+            return;
+        }
+        const tipoLabel = { entrada_compra: 'Entrada (Compra)', entrada_devolucion: 'Entrada (Devolución)', salida_venta: 'Salida (Venta)', salida_baja: 'Salida (Baja)' };
+        tbody.innerHTML = rows.map(m => `
+            <tr>
+                <td>${new Date(m.created_at).toLocaleString('es-MX')}</td>
+                <td>${m.producto_nombre} ${m.producto_codigo ? '(' + m.producto_codigo + ')' : ''}</td>
+                <td>${tipoLabel[m.tipo] || m.tipo}</td>
+                <td><strong>${m.cantidad}</strong></td>
+                <td>${m.observaciones || '—'}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        document.getElementById('movimientos-tbody').innerHTML = '<tr><td colspan="5" style="text-align: center;">Error al cargar</td></tr>';
+    }
+}
+
+// ================================
+// PEDIDOS Y ASIGNACIÓN
+// ================================
+
+async function loadProductosParaPedidos() {
+    try {
+        const res = await fetch('/api/productos', { credentials: 'include' });
+        const productos = await res.json();
+        const sel = document.getElementById('pedido-producto');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Seleccionar producto</option>' + productos.map(p => `<option value="${p.id}">${p.nombre} - Stock: ${p.stock ?? 0}</option>`).join('');
+    } catch (err) {
+        console.error('Error cargar productos pedidos:', err);
+    }
+}
+
+async function loadPedidos() {
+    try {
+        const res = await fetch('/api/pedidos', { credentials: 'include' });
+        const rows = await res.json();
+        const tbody = document.getElementById('pedidos-tbody');
+        if (!tbody) return;
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No hay pedidos</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(p => `
+            <tr>
+                <td>#${p.id}</td>
+                <td>${p.producto_nombre} ${p.codigo ? '(' + p.codigo + ')' : ''}</td>
+                <td>${p.cantidad_solicitada}</td>
+                <td>${p.cantidad_asignada ?? 0}</td>
+                <td><span class="badge badge-${p.estado === 'surtido' ? 'success' : 'warning'}">${p.estado}</span></td>
+                <td>${p.estado === 'pendiente' || p.estado === 'parcial' ? `<button class="btn-edit" onclick="ejecutarAsignacion(${p.producto_id})">Ejecutar asignación</button>` : '—'}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        const tbody = document.getElementById('pedidos-tbody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Error al cargar (¿ejecutó el SQL de inventario?)</td></tr>';
+    }
+}
+
+async function ejecutarAsignacion(producto_id) {
+    try {
+        const res = await fetch('/api/asignacion/ejecutar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ producto_id }),
+            credentials: 'include'
+        });
+        const data = await res.json();
+        if (res.ok) {
+            mostrarNotificacion(data.message || 'Asignación ejecutada', 'success');
+            loadPedidos();
+            loadDashboardMetricas();
+        } else {
+            mostrarNotificacion(data.error || 'Error en asignación', 'danger');
+        }
+    } catch (err) {
+        mostrarNotificacion('Error de conexión o motor Python no disponible', 'danger');
+    }
+}
+
+// ================================
+// REGLAS DE ASIGNACIÓN (Admin)
+// ================================
+
+async function loadReglasAsignacion() {
+    try {
+        const res = await fetch('/api/reglas-asignacion', { credentials: 'include' });
+        const reglas = await res.json();
+        const container = document.getElementById('reglas-container');
+        if (!container) return;
+        if (reglas.length === 0) {
+            container.innerHTML = '<p>No hay reglas configuradas.</p>';
+            return;
+        }
+        const criterios = { prioridad_fifo: 'FIFO (primero en llegar)', prioridad_mayor: 'Mayor prioridad', prioridad_cantidad: 'Menor cantidad primero', prioridad_cliente: 'Prioridad cliente' };
+        container.innerHTML = reglas.map(r => `
+            <div class="card" style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <strong>${r.nombre}</strong>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">${criterios[r.criterio] || r.criterio}</div>
+                    </div>
+                    <div>
+                        <select class="form-input" style="width: auto;" onchange="actualizarRegla(${r.id}, this.value)">
+                            <option value="prioridad_fifo" ${r.criterio === 'prioridad_fifo' ? 'selected' : ''}>FIFO</option>
+                            <option value="prioridad_mayor" ${r.criterio === 'prioridad_mayor' ? 'selected' : ''}>Mayor prioridad</option>
+                            <option value="prioridad_cantidad" ${r.criterio === 'prioridad_cantidad' ? 'selected' : ''}>Menor cantidad</option>
+                            <option value="prioridad_cliente" ${r.criterio === 'prioridad_cliente' ? 'selected' : ''}>Prioridad cliente</option>
+                        </select>
+                        <span style="margin-left: 0.5rem;">${r.activo ? '✅ Activa' : 'Inactiva'}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        document.getElementById('reglas-container').innerHTML = '<p>Error al cargar (¿ejecutó el SQL de inventario?)</p>';
+    }
+}
+
+async function actualizarRegla(id, criterio) {
+    try {
+        const res = await fetch(`/api/reglas-asignacion/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ criterio }),
+            credentials: 'include'
+        });
+        if (res.ok) mostrarNotificacion('Regla actualizada', 'success');
+        else {
+            const d = await res.json();
+            mostrarNotificacion(d.error || 'Error', 'danger');
+        }
+    } catch (err) {
+        mostrarNotificacion('Error al actualizar regla', 'danger');
     }
 }
 
@@ -467,7 +719,7 @@ async function loadAlertasBajoStock() {
         container.innerHTML = alertas.map(producto => `
             <div style="
                 background: rgba(239, 68, 68, 0.05);
-                border-left: 4px solid #ef4444;
+                border-left: 4px solid var(--danger);
                 padding: 1rem;
                 border-radius: 8px;
                 margin-bottom: 0.75rem;
@@ -482,7 +734,7 @@ async function loadAlertasBajoStock() {
                         </div>
                     </div>
                     <div style="
-                        background: #ef4444;
+                        background: var(--danger);
                         color: white;
                         padding: 0.5rem 1rem;
                         border-radius: 6px;
@@ -563,7 +815,7 @@ async function loadProductosEstrella() {
         
         container.innerHTML = productos.map((p, index) => {
             const medals = ['🥇', '🥈', '🥉'];
-            const colors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+            const colors = ['#96E072', '#C2C0BA', '#427AA1'];
             
             return `
                 <div style="
@@ -597,7 +849,7 @@ async function loadProductosEstrella() {
                             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
                                 Mes Actual
                             </div>
-                            <div style="font-weight: 600; color: #10b981;">
+                            <div style="font-weight: 600; color: #208B3A;">
                                 $${parseFloat(p.total_ventas).toLocaleString('es-MX', {minimumFractionDigits: 2})}
                             </div>
                         </div>
@@ -613,7 +865,7 @@ async function loadProductosEstrella() {
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
                             Crecimiento
                         </div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #208B3A;">
                             +${p.crecimiento_porcentual}%
                         </div>
                     </div>
@@ -701,13 +953,13 @@ async function loadAnalisisTemporal(nivel) {
                 datasets: [{
                     label: 'Ventas',
                     data: values,
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderColor: 'rgba(5, 102, 141, 1)',
+                    backgroundColor: 'rgba(5, 102, 141, 0.12)',
                     borderWidth: 3,
                     fill: true,
                     tension: 0.4,
                     pointRadius: 5,
-                    pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                    pointBackgroundColor: 'rgba(5, 102, 141, 1)',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2
                 }]
@@ -821,14 +1073,18 @@ async function loadVentasPorCategoria() {
                     label: 'Ventas ($)',
                     data: values.length > 0 ? values : [0],
                     backgroundColor: [
-                        'rgba(59, 130, 246, 0.8)',
-                        'rgba(139, 92, 246, 0.8)',
-                        'rgba(16, 185, 129, 0.8)'
+                        'rgba(5, 102, 141, 0.8)',
+                        'rgba(66, 122, 161, 0.8)',
+                        'rgba(32, 139, 58, 0.8)',
+                        'rgba(150, 224, 114, 0.8)',
+                        'rgba(194, 192, 186, 0.6)'
                     ],
                     borderColor: [
-                        'rgba(59, 130, 246, 1)',
-                        'rgba(139, 92, 246, 1)',
-                        'rgba(16, 185, 129, 1)'
+                        'rgba(5, 102, 141, 1)',
+                        'rgba(66, 122, 161, 1)',
+                        'rgba(32, 139, 58, 1)',
+                        'rgba(150, 224, 114, 1)',
+                        'rgba(194, 192, 186, 1)'
                     ],
                     borderWidth: 2,
                     borderRadius: 8
@@ -891,8 +1147,8 @@ async function loadTopProductos() {
                 datasets: [{
                     label: 'Ventas ($)',
                     data: values,
-                    backgroundColor: 'rgba(139, 92, 246, 0.8)',
-                    borderColor: 'rgba(139, 92, 246, 1)',
+                    backgroundColor: 'rgba(66, 122, 161, 0.8)',
+                    borderColor: 'rgba(66, 122, 161, 1)',
                     borderWidth: 2,
                     borderRadius: 6
                 }]
@@ -952,11 +1208,11 @@ async function loadRankingSucursales() {
                 datasets: [{
                     data: values,
                     backgroundColor: [
-                        'rgba(59, 130, 246, 0.8)',
-                        'rgba(139, 92, 246, 0.8)',
-                        'rgba(16, 185, 129, 0.8)',
-                        'rgba(245, 158, 11, 0.8)',
-                        'rgba(239, 68, 68, 0.8)'
+                        'rgba(5, 102, 141, 0.8)',
+                        'rgba(66, 122, 161, 0.8)',
+                        'rgba(32, 139, 58, 0.8)',
+                        'rgba(150, 224, 114, 0.8)',
+                        'rgba(194, 192, 186, 0.7)'
                     ],
                     borderWidth: 2,
                     borderColor: '#fff'
@@ -1008,13 +1264,13 @@ async function loadTendenciaMensual() {
                 datasets: [{
                     label: 'Ventas Mensuales',
                     data: values,
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderColor: 'rgba(5, 102, 141, 1)',
+                    backgroundColor: 'rgba(5, 102, 141, 0.12)',
                     borderWidth: 3,
                     fill: true,
                     tension: 0.4,
                     pointRadius: 5,
-                    pointBackgroundColor: 'rgba(59, 130, 246, 1)'
+                    pointBackgroundColor: 'rgba(5, 102, 141, 1)'
                 }]
             },
             options: {
@@ -1079,10 +1335,11 @@ async function loadAnalisisPorRegion() {
                 datasets: [{
                     data: values,
                     backgroundColor: [
-                        'rgba(59, 130, 246, 0.6)',
-                        'rgba(139, 92, 246, 0.6)',
-                        'rgba(16, 185, 129, 0.6)',
-                        'rgba(245, 158, 11, 0.6)'
+                        'rgba(5, 102, 141, 0.6)',
+                        'rgba(66, 122, 161, 0.6)',
+                        'rgba(32, 139, 58, 0.6)',
+                        'rgba(150, 224, 114, 0.6)',
+                        'rgba(194, 192, 186, 0.5)'
                     ],
                     borderWidth: 2,
                     borderColor: '#fff'
@@ -1133,7 +1390,7 @@ async function loadAnalisisDetallado() {
                     <td>
                         <span style="
                             background: ${item.categoria === 'Electrónica' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(139, 92, 246, 0.1)'};
-                            color: ${item.categoria === 'Electrónica' ? 'var(--primary)' : 'var(--purple)'};
+                            color: ${item.categoria === 'Electrónica' ? 'var(--primary)' : 'var(--cerulean)'};
                             padding: 0.375rem 0.75rem;
                             border-radius: 6px;
                             font-size: 0.875rem;
@@ -1220,24 +1477,23 @@ async function updateUserInfo() {
             const user = data.user;
             
             const userNameElement = document.getElementById('user-name');
-            if (userNameElement) {
-                userNameElement.textContent = user.nombre;
-            }
-            
+            if (userNameElement) userNameElement.textContent = user.nombre;
             const userEmailElement = document.getElementById('user-email');
-            if (userEmailElement) {
-                userEmailElement.textContent = user.email;
-            }
-            
+            if (userEmailElement) userEmailElement.textContent = user.email;
             const userInitialElement = document.getElementById('user-initial');
-            if (userInitialElement) {
-                userInitialElement.textContent = user.nombre.charAt(0).toUpperCase();
-            }
+            if (userInitialElement) userInitialElement.textContent = (user.nombre || 'U').charAt(0).toUpperCase();
+            
+            document.body.classList.remove('role-administrador', 'role-operador');
+            if (user.rol === 'administrador') document.body.classList.add('role-administrador');
+            else if (user.rol === 'operador') document.body.classList.add('role-operador');
+            return true;
         } else {
             window.location.href = '/login.html';
+            return false;
         }
     } catch (error) {
         console.error('Error actualizando info de usuario:', error);
+        return false;
     }
 }
 
@@ -1270,9 +1526,100 @@ async function handleLogout() {
 // Event Listeners
 // ================================
 document.addEventListener('DOMContentLoaded', () => {
-    updateUserInfo();
-    renderTable();
+    // Evitar espacios al inicio/final en todos los campos CRUD
+    function trimInputBlur(e) {
+        const el = e.target;
+        if (el.value && typeof el.value === 'string') {
+            const t = el.value.trim();
+            if (el.value !== t) el.value = t;
+        }
+    }
+    function noLeadingSpaceKeydown(e) {
+        if (e.key === ' ' && e.target.selectionStart === 0) e.preventDefault();
+    }
+    const crudSelectors = '#product-form input, #product-form select, #sucursal-form input, #sucursal-form select, #categoria-form input, #movimiento-form input, #movimiento-form select, #pedido-form input, #pedido-form select, #buscar-producto';
+    document.querySelectorAll(crudSelectors).forEach(function(el) {
+        el.addEventListener('blur', trimInputBlur);
+        el.addEventListener('keydown', noLeadingSpaceKeydown);
+    });
+
+    // Restringir cada campo CRUD al tipo de dato que requiere (solo valores permitidos)
+    function aplicarFiltroTexto(el, regexEliminar) {
+        const v = el.value;
+        if (!v) return;
+        const filtrado = v.replace(regexEliminar, '');
+        if (v !== filtrado) {
+            const start = el.selectionStart;
+            const antes = v.substring(0, start);
+            const eliminadosAntes = antes.length - antes.replace(regexEliminar, '').length;
+            el.value = filtrado;
+            el.setSelectionRange(Math.max(0, start - eliminadosAntes), Math.max(0, start - eliminadosAntes));
+        }
+    }
+    function soloEnteros(e) {
+        const el = e.target;
+        const v = el.value.replace(/\D/g, '');
+        if (el.value !== v) {
+            const start = el.selectionStart;
+            const digitosAntes = (el.value.substring(0, start).match(/\d/g) || []).length;
+            el.value = v;
+            el.setSelectionRange(digitosAntes, digitosAntes);
+        }
+    }
+    function soloDecimal(e) {
+        const el = e.target;
+        let v = el.value.replace(/[^\d.]/g, '');
+        const partes = v.split('.');
+        if (partes.length > 2) v = partes[0] + '.' + partes.slice(1).join('');
+        else if (partes.length === 2 && partes[1].length > 2) v = partes[0] + '.' + partes[1].substring(0, 2);
+        if (el.value !== v) {
+            el.value = v;
+        }
+    }
+    const filtrosTexto = {
+        'nombre': /[^\p{L}\p{N}\s]/gu,
+        'codigo': /[^a-zA-Z0-9\-]/g,
+        'pasillo': /[^a-zA-Z0-9]/g,
+        'estante': /[^a-zA-Z0-9]/g,
+        'nivel': /[^a-zA-Z0-9]/g,
+        'mov-observaciones': /[^\p{L}\p{N}\s.,\-]/gu,
+        'pedido-cliente': /[^\p{L}\p{N}\s]/gu,
+        'nombre-sucursal': /[^\p{L}\s]/gu,
+        'ciudad-sucursal': /[^\p{L}\s]/gu,
+        'estado-sucursal': /[^\p{L}\s]/gu,
+        'nombre-categoria': /[^\p{L}\s]/gu,
+        'buscar-producto': /[^\p{L}\p{N}\s]/gu
+    };
+    Object.keys(filtrosTexto).forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', function(e) { aplicarFiltroTexto(e.target, filtrosTexto[id]); });
+        el.addEventListener('paste', function() {
+            setTimeout(function() { aplicarFiltroTexto(el, filtrosTexto[id]); }, 0);
+        });
+    });
+    const idsEnteros = ['stock', 'punto_reorden', 'mov-cantidad', 'pedido-cantidad', 'pedido-prioridad'];
+    idsEnteros.forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', soloEnteros);
+        el.addEventListener('paste', function() { setTimeout(function() { soloEnteros({ target: el }); }, 0); });
+    });
+    const precioEl = document.getElementById('precio');
+    if (precioEl) {
+        precioEl.addEventListener('input', soloDecimal);
+        precioEl.addEventListener('paste', function() { setTimeout(function() { soloDecimal({ target: precioEl }); }, 0); });
+    }
+
+    // Cargar métricas y panel solo tras confirmar sesión (evita 401 en panel)
+    updateUserInfo().then((ok) => {
+        if (ok) {
+            loadDashboardMetricas();
+            loadPanelAlertas();
+        }
+    });
     loadCategoriasSelect();
+    renderTable();
     
     // FORMULARIO DE PRODUCTOS
     document.getElementById('product-form').addEventListener('submit', async (e) => {
@@ -1281,19 +1628,55 @@ document.addEventListener('DOMContentLoaded', () => {
         const nombre = document.getElementById('nombre').value.trim();
         const categoria_id = document.getElementById('categoria').value;
         const precio = document.getElementById('precio').value;
-        const stock = document.getElementById('stock').value || 0;
+        const stock = document.getElementById('stock').value;
+        const codigo = document.getElementById('codigo')?.value?.trim() ?? '';
+        const punto_reorden = document.getElementById('punto_reorden')?.value ?? '';
+        const pasillo = document.getElementById('pasillo')?.value?.trim() ?? '';
+        const estante = document.getElementById('estante')?.value?.trim() ?? '';
+        const nivel = document.getElementById('nivel')?.value?.trim() ?? '';
 
-        if (nombre === "" || precio === "" || categoria_id === "") {
-            mostrarNotificacion("Todos los campos son obligatorios", "danger");
+        if (!nombre) {
+            mostrarNotificacion("El nombre del producto es obligatorio", "danger");
             return;
         }
-
+        if (!codigo) {
+            mostrarNotificacion("El código es obligatorio", "danger");
+            return;
+        }
+        if (!categoria_id) {
+            mostrarNotificacion("Debe seleccionar una categoría", "danger");
+            return;
+        }
+        if (precio === "" || precio === null || precio === undefined) {
+            mostrarNotificacion("El precio unitario es obligatorio", "danger");
+            return;
+        }
         if (parseFloat(precio) < 0) {
             mostrarNotificacion("El precio debe ser un valor positivo", "danger");
             return;
         }
+        if (stock === "" || stock === null || stock === undefined) {
+            mostrarNotificacion("El stock es obligatorio", "danger");
+            return;
+        }
+        if (!punto_reorden && punto_reorden !== 0) {
+            mostrarNotificacion("El punto de reorden es obligatorio", "danger");
+            return;
+        }
+        if (!pasillo) {
+            mostrarNotificacion("El pasillo es obligatorio", "danger");
+            return;
+        }
+        if (!estante) {
+            mostrarNotificacion("El estante es obligatorio", "danger");
+            return;
+        }
+        if (!nivel) {
+            mostrarNotificacion("El nivel es obligatorio", "danger");
+            return;
+        }
 
-        const data = { nombre, categoria_id, precio_unitario: precio, stock: parseInt(stock) };
+        const data = { nombre, categoria_id, precio_unitario: precio, stock: parseInt(stock, 10), codigo, punto_reorden: parseInt(punto_reorden, 10), pasillo, estante, nivel };
         const method = editMode ? 'PUT' : 'POST';
         const url = editMode ? `/api/productos/${editId}` : '/api/productos';
 
@@ -1408,6 +1791,100 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error("Error al guardar categoría:", err);
                 mostrarNotificacion('Error al guardar la categoría', 'danger');
+            }
+        });
+    }
+
+    // FORMULARIO MOVIMIENTOS
+    const movimientoForm = document.getElementById('movimiento-form');
+    if (movimientoForm) {
+        movimientoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const producto_id = document.getElementById('mov-producto').value;
+            const tipo = document.getElementById('mov-tipo').value;
+            const cantidad = parseInt(document.getElementById('mov-cantidad').value, 10);
+            const observaciones = document.getElementById('mov-observaciones').value.trim();
+            if (!producto_id) {
+                mostrarNotificacion('Debe seleccionar un producto', 'danger');
+                return;
+            }
+            if (!tipo) {
+                mostrarNotificacion('Debe seleccionar el tipo de movimiento', 'danger');
+                return;
+            }
+            if (!cantidad || cantidad < 1) {
+                mostrarNotificacion('La cantidad es obligatoria y debe ser mayor a 0', 'danger');
+                return;
+            }
+            if (!observaciones) {
+                mostrarNotificacion('Las observaciones son obligatorias', 'danger');
+                return;
+            }
+            try {
+                const res = await fetch('/api/movimientos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ producto_id: parseInt(producto_id, 10), tipo, cantidad, observaciones }),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    mostrarNotificacion(data.message || 'Movimiento registrado', 'success');
+                    movimientoForm.reset();
+                    loadMovimientos();
+                    loadDashboardMetricas();
+                } else {
+                    mostrarNotificacion(data.error || 'Error', 'danger');
+                }
+            } catch (err) {
+                mostrarNotificacion('Error al registrar movimiento', 'danger');
+            }
+        });
+    }
+
+    // FORMULARIO PEDIDOS
+    const pedidoForm = document.getElementById('pedido-form');
+    if (pedidoForm) {
+        pedidoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const producto_id = document.getElementById('pedido-producto').value;
+            const cantidad_solicitada = parseInt(document.getElementById('pedido-cantidad').value, 10);
+            const prioridad = document.getElementById('pedido-prioridad').value;
+            const cliente_ref = document.getElementById('pedido-cliente').value.trim();
+            if (!producto_id) {
+                mostrarNotificacion('Debe seleccionar un producto', 'danger');
+                return;
+            }
+            if (!cantidad_solicitada || cantidad_solicitada < 1) {
+                mostrarNotificacion('La cantidad solicitada es obligatoria y debe ser mayor a 0', 'danger');
+                return;
+            }
+            if (prioridad === '' || prioridad === null || prioridad === undefined) {
+                mostrarNotificacion('La prioridad es obligatoria', 'danger');
+                return;
+            }
+            if (!cliente_ref) {
+                mostrarNotificacion('Cliente / Referencia es obligatorio', 'danger');
+                return;
+            }
+            try {
+                const res = await fetch('/api/pedidos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ producto_id: parseInt(producto_id, 10), cantidad_solicitada, prioridad: parseInt(prioridad, 10), cliente_ref }),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    mostrarNotificacion('Pedido creado', 'success');
+                    pedidoForm.reset();
+                    loadPedidos();
+                    loadDashboardMetricas();
+                } else {
+                    mostrarNotificacion(data.error || 'Error', 'danger');
+                }
+            } catch (err) {
+                mostrarNotificacion('Error al crear pedido', 'danger');
             }
         });
     }

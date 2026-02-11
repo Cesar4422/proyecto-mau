@@ -1,0 +1,8 @@
+-- Ya no actualizamos el password por SQL (evitamos problemas con el hash).
+--
+-- Para crear o corregir el usuario de prueba, en la terminal del proyecto ejecuta:
+--   python scripts/crear_usuario_prueba.py
+--
+-- Para cualquier otro usuario (crear o restablecer contraseña):
+--   python scripts/crear_o_actualizar_usuario.py <email> <contraseña> [nombre] [rol]
+-- Ejemplo: python scripts/crear_o_actualizar_usuario.py prueba@test.com prueba123 "Usuario Prueba" administrador

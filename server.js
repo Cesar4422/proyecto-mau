@@ -49,6 +49,23 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'No autorizado. Por favor inicia sesión.' });
 }
 
+// Solo Administrador (configuración de reglas, ajustes de inventario)
+function requireAdmin(req, res, next) {
+    if (req.session && req.session.userId && req.session.userRole === 'administrador') {
+        return next();
+    }
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol Administrador.' });
+}
+
+// Operador o Administrador (registro de movimientos, consulta de ubicaciones)
+function requireOperator(req, res, next) {
+    const role = req.session && req.session.userRole;
+    if (req.session && req.session.userId && (role === 'operador' || role === 'administrador')) {
+        return next();
+    }
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol Operador o Administrador.' });
+}
+
 // Servir archivos estáticos
 app.use(express.static('public'));
 
@@ -176,21 +193,46 @@ app.get('/api/auth/check', (req, res) => {
 // CRUD: ESQUEMA TRANSACCIONAL (Protegido)
 // ============================================
 
-// Obtener todos los productos CON nombre de categoría
+// Obtener productos con búsqueda y filtrado (nombre, código, categoría)
 app.get('/api/productos', requireAuth, async (req, res) => {
+    const { q, categoria_id, codigo } = req.query;
     try {
-        const result = await pool.query(`
+        let query = `
             SELECT 
                 p.id,
                 p.nombre,
+                p.codigo,
                 p.categoria_id,
                 c.nombre as categoria_nombre,
                 p.precio_unitario,
-                p.stock
+                p.stock,
+                p.punto_reorden,
+                p.pasillo,
+                p.estante,
+                p.nivel
             FROM transaccional.productos p
             LEFT JOIN transaccional.categorias c ON p.categoria_id = c.id
-            ORDER BY p.id DESC
-        `);
+            WHERE 1=1
+        `;
+        const params = [];
+        let idx = 1;
+        if (q && String(q).trim()) {
+            query += ` AND (p.nombre ILIKE $${idx} OR p.codigo ILIKE $${idx})`;
+            params.push('%' + String(q).trim() + '%');
+            idx++;
+        }
+        if (categoria_id) {
+            query += ` AND p.categoria_id = $${idx}`;
+            params.push(categoria_id);
+            idx++;
+        }
+        if (codigo && String(codigo).trim()) {
+            query += ` AND p.codigo ILIKE $${idx}`;
+            params.push('%' + String(codigo).trim() + '%');
+            idx++;
+        }
+        query += ` ORDER BY p.id DESC`;
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
         console.error('Error al obtener productos:', error);
@@ -199,7 +241,7 @@ app.get('/api/productos', requireAuth, async (req, res) => {
 });
 
 app.post('/api/productos', requireAuth, async (req, res) => {
-    const { nombre, categoria_id, precio_unitario } = req.body;
+    const { nombre, codigo, categoria_id, precio_unitario, stock, punto_reorden, pasillo, estante, nivel } = req.body;
     
     if (!nombre || nombre.trim() === "" || precio_unitario === undefined) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -209,10 +251,14 @@ app.post('/api/productos', requireAuth, async (req, res) => {
         return res.status(400).json({ error: "El precio no puede ser negativo" });
     }
 
+    const stockVal = stock != null ? parseInt(stock, 10) : 0;
+    const puntoVal = punto_reorden != null ? parseInt(punto_reorden, 10) : 5;
+
     try {
         const result = await pool.query(
-            'INSERT INTO transaccional.productos (nombre, categoria_id, precio_unitario) VALUES ($1, $2, $3) RETURNING *',
-            [nombre, categoria_id, precio_unitario]
+            `INSERT INTO transaccional.productos (nombre, codigo, categoria_id, precio_unitario, stock, punto_reorden, pasillo, estante, nivel)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            [nombre, codigo || null, categoria_id || null, precio_unitario, stockVal, puntoVal, pasillo || null, estante || null, nivel || null]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -222,17 +268,26 @@ app.post('/api/productos', requireAuth, async (req, res) => {
 
 app.put('/api/productos/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
-    const { nombre, categoria_id, precio_unitario } = req.body;
+    const { nombre, codigo, categoria_id, precio_unitario, stock, punto_reorden, pasillo, estante, nivel } = req.body;
 
-    if (precio_unitario < 0) {
+    if (precio_unitario != null && parseFloat(precio_unitario) < 0) {
         return res.status(400).json({ error: "El precio no puede ser negativo" });
     }
 
     try {
         const result = await pool.query(
-            'UPDATE transaccional.productos SET nombre = $1, categoria_id = $2, precio_unitario = $3 WHERE id = $4 RETURNING *',
-            [nombre, categoria_id, precio_unitario, id]
+            `UPDATE transaccional.productos SET 
+             nombre = COALESCE($1, nombre),
+             codigo = $2,
+             categoria_id = COALESCE($3, categoria_id),
+             precio_unitario = COALESCE($4, precio_unitario),
+             stock = COALESCE($5, stock),
+             punto_reorden = COALESCE($6, punto_reorden),
+             pasillo = $7, estante = $8, nivel = $9
+             WHERE id = $10 RETURNING *`,
+            [nombre, codigo ?? null, categoria_id, precio_unitario, stock != null ? parseInt(stock, 10) : null, punto_reorden != null ? parseInt(punto_reorden, 10) : null, pasillo ?? null, estante ?? null, nivel ?? null, id]
         );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
         res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -390,7 +445,7 @@ app.delete('/api/categorias/:id', requireAuth, async (req, res) => {
 });
 
 // ============================================
-// CONTROL DE STOCK Y ALERTAS
+// CONTROL DE STOCK Y ALERTAS (punto de reorden por producto)
 // ============================================
 
 app.get('/api/alertas/bajo-stock', requireAuth, async (req, res) => {
@@ -399,12 +454,14 @@ app.get('/api/alertas/bajo-stock', requireAuth, async (req, res) => {
             SELECT 
                 p.id,
                 p.nombre,
+                p.codigo,
                 c.nombre as categoria,
                 p.stock,
+                p.punto_reorden,
                 p.precio_unitario
             FROM transaccional.productos p
-            JOIN transaccional.categorias c ON p.categoria_id = c.id
-            WHERE p.stock < 5
+            LEFT JOIN transaccional.categorias c ON p.categoria_id = c.id
+            WHERE p.stock < COALESCE(NULLIF(p.punto_reorden, 0), 5)
             ORDER BY p.stock ASC
         `);
         res.json(result.rows);
@@ -469,6 +526,260 @@ app.post('/api/ventas/registrar', requireAuth, async (req, res) => {
         res.status(500).json({ error: err.message });
     } finally {
         client.release();
+    }
+});
+
+// ============================================
+// CONTROL DE ENTRADAS Y SALIDAS (movimientos)
+// ============================================
+
+app.get('/api/movimientos', requireAuth, async (req, res) => {
+    const { producto_id, tipo, limit } = req.query;
+    try {
+        let query = `
+            SELECT m.id, m.producto_id, p.nombre as producto_nombre, p.codigo as producto_codigo,
+                   m.tipo, m.cantidad, m.usuario_id, m.observaciones, m.created_at
+            FROM transaccional.movimientos m
+            JOIN transaccional.productos p ON p.id = m.producto_id
+            WHERE 1=1
+        `;
+        const params = [];
+        let idx = 1;
+        if (producto_id) { query += ` AND m.producto_id = $${idx}`; params.push(producto_id); idx++; }
+        if (tipo) { query += ` AND m.tipo = $${idx}`; params.push(tipo); idx++; }
+        query += ` ORDER BY m.created_at DESC LIMIT $${idx}`;
+        params.push(parseInt(limit, 10) || 100);
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/movimientos', requireAuth, async (req, res) => {
+    const { producto_id, tipo, cantidad, observaciones } = req.body;
+    const userId = req.session.userId;
+    if (!producto_id || !tipo || !cantidad || cantidad <= 0) {
+        return res.status(400).json({ error: 'producto_id, tipo y cantidad (positiva) son obligatorios' });
+    }
+    const validTypes = ['entrada_compra', 'entrada_devolucion', 'salida_venta', 'salida_baja'];
+    if (!validTypes.includes(tipo)) {
+        return res.status(400).json({ error: 'tipo debe ser: entrada_compra, entrada_devolucion, salida_venta, salida_baja' });
+    }
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const prod = await client.query('SELECT id, nombre, stock FROM transaccional.productos WHERE id = $1', [producto_id]);
+        if (prod.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Producto no encontrado' });
+        }
+        const stockActual = prod.rows[0].stock || 0;
+        const isEntrada = tipo.startsWith('entrada_');
+        const delta = isEntrada ? cantidad : -cantidad;
+        const nuevoStock = stockActual + delta;
+        if (nuevoStock < 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Stock insuficiente. Disponible: ${stockActual}` });
+        }
+        await client.query(
+            'INSERT INTO transaccional.movimientos (producto_id, tipo, cantidad, usuario_id, observaciones) VALUES ($1, $2, $3, $4, $5)',
+            [producto_id, tipo, cantidad, userId, observaciones || null]
+        );
+        await client.query('UPDATE transaccional.productos SET stock = $1 WHERE id = $2', [nuevoStock, producto_id]);
+        await client.query('COMMIT');
+        res.status(201).json({
+            message: 'Movimiento registrado',
+            producto: prod.rows[0].nombre,
+            tipo,
+            cantidad,
+            stock_anterior: stockActual,
+            stock_actual: nuevoStock
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ============================================
+// PANEL DE MÉTRICAS (Dashboard)
+// ============================================
+
+app.get('/api/dashboard/metricas', requireAuth, async (req, res) => {
+    try {
+        const [agotados, pendientes, ocupacion] = await Promise.all([
+            pool.query(`
+                SELECT COUNT(*)::INT as total FROM transaccional.productos WHERE COALESCE(stock, 0) = 0
+            `),
+            pool.query(`
+                SELECT COUNT(*)::INT as total FROM transaccional.pedidos WHERE estado IN ('pendiente', 'parcial')
+            `),
+            pool.query(`
+                SELECT 
+                    COUNT(*)::INT as total_productos,
+                    COALESCE(SUM(stock), 0)::BIGINT as total_unidades
+                FROM transaccional.productos
+            `)
+        ]);
+        const totalProductos = ocupacion.rows[0].total_productos || 0;
+        const totalUnidades = Number(ocupacion.rows[0].total_unidades) || 0;
+        res.json({
+            productos_agotados: agotados.rows[0].total,
+            ordenes_pendientes_surtir: pendientes.rows[0].total,
+            total_productos: totalProductos,
+            total_unidades: totalUnidades,
+            ocupacion_almacen: totalProductos ? `${totalProductos} productos, ${totalUnidades} unidades` : 'Sin datos'
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// PEDIDOS Y REGLAS DE ASIGNACIÓN
+// ============================================
+
+app.get('/api/pedidos', requireAuth, async (req, res) => {
+    const { estado, producto_id } = req.query;
+    try {
+        let query = `
+            SELECT pd.id, pd.producto_id, p.nombre as producto_nombre, p.codigo, p.stock,
+                   pd.cantidad_solicitada, pd.cantidad_asignada, pd.estado, pd.prioridad, pd.cliente_ref, pd.fecha_solicitud
+            FROM transaccional.pedidos pd
+            JOIN transaccional.productos p ON p.id = pd.producto_id
+            WHERE 1=1
+        `;
+        const params = [];
+        let idx = 1;
+        if (estado) { query += ` AND pd.estado = $${idx}`; params.push(estado); idx++; }
+        if (producto_id) { query += ` AND pd.producto_id = $${idx}`; params.push(producto_id); idx++; }
+        query += ' ORDER BY pd.fecha_solicitud DESC';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/pedidos', requireAuth, async (req, res) => {
+    const { producto_id, cantidad_solicitada, prioridad, cliente_ref } = req.body;
+    if (!producto_id || !cantidad_solicitada || cantidad_solicitada <= 0) {
+        return res.status(400).json({ error: 'producto_id y cantidad_solicitada son obligatorios' });
+    }
+    try {
+        const result = await pool.query(
+            `INSERT INTO transaccional.pedidos (producto_id, cantidad_solicitada, prioridad, cliente_ref, usuario_id)
+             VALUES ($1, $2, COALESCE($3, 0), $4, $5) RETURNING *`,
+            [producto_id, cantidad_solicitada, prioridad || 0, cliente_ref || null, req.session.userId]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/reglas-asignacion', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM transaccional.reglas_asignacion ORDER BY activo DESC, id');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/reglas-asignacion/:id', requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { nombre, criterio, activo } = req.body;
+    try {
+        const result = await pool.query(
+            `UPDATE transaccional.reglas_asignacion SET nombre = COALESCE($1, nombre), criterio = COALESCE($2, criterio), activo = COALESCE($3, activo) WHERE id = $4 RETURNING *`,
+            [nombre, criterio, activo, id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Regla no encontrada' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// MOTOR DE ASIGNACIÓN AUTOMÁTICA (Python)
+// ============================================
+
+const { spawn } = require('child_process');
+const path = require('path');
+
+app.post('/api/asignacion/ejecutar', requireAuth, async (req, res) => {
+    const { producto_id } = req.body;
+    if (!producto_id) {
+        return res.status(400).json({ error: 'producto_id es obligatorio' });
+    }
+    try {
+        const [producto, pedidosPendientes, regla] = await Promise.all([
+            pool.query('SELECT id, nombre, stock FROM transaccional.productos WHERE id = $1', [producto_id]),
+            pool.query(`SELECT id, cantidad_solicitada, cantidad_asignada, prioridad, fecha_solicitud FROM transaccional.pedidos WHERE producto_id = $1 AND estado IN ('pendiente', 'parcial') ORDER BY id`, [producto_id]),
+            pool.query("SELECT criterio FROM transaccional.reglas_asignacion WHERE activo = true LIMIT 1")
+        ]);
+        if (producto.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
+        const stockDisponible = producto.rows[0].stock || 0;
+        const pedidos = pedidosPendientes.rows.map(r => ({
+            id: r.id,
+            cantidad_solicitada: r.cantidad_solicitada,
+            cantidad_asignada: r.cantidad_asignada || 0,
+            prioridad: r.prioridad || 0,
+            fecha_solicitud: r.fecha_solicitud
+        }));
+        if (pedidos.length === 0) {
+            return res.json({ message: 'No hay pedidos pendientes para este producto', asignaciones: [] });
+        }
+        const criterio = (regla.rows[0] && regla.rows[0].criterio) || 'prioridad_fifo';
+        const scriptPath = path.join(__dirname, 'scripts', 'asignacion_engine.py');
+        const input = JSON.stringify({ producto_id, stock_disponible: stockDisponible, criterio, pedidos });
+        const py = spawn('python3', [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+        let stdout = '';
+        let stderr = '';
+        py.stdout.on('data', (d) => { stdout += d.toString(); });
+        py.stderr.on('data', (d) => { stderr += d.toString(); });
+        py.stdin.write(input);
+        py.stdin.end();
+        py.on('close', async (code) => {
+            if (code !== 0) {
+                return res.status(500).json({ error: 'Error en motor de asignación: ' + (stderr || stdout || 'código ' + code) });
+            }
+            let asignaciones;
+            try {
+                asignaciones = JSON.parse(stdout);
+            } catch (e) {
+                return res.status(500).json({ error: 'Respuesta inválida del motor de asignación' });
+            }
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                let stockRestante = stockDisponible;
+                for (const a of asignaciones) {
+                    const cant = Math.min(a.cantidad_asignada, stockRestante);
+                    if (cant <= 0) continue;
+                    await client.query(
+                        'UPDATE transaccional.pedidos SET cantidad_asignada = cantidad_asignada + $1, estado = CASE WHEN cantidad_asignada + $1 >= cantidad_solicitada THEN \'surtido\' ELSE \'parcial\' END WHERE id = $2',
+                        [cant, a.pedido_id]
+                    );
+                    stockRestante -= cant;
+                }
+                await client.query('UPDATE transaccional.productos SET stock = stock - $1 WHERE id = $2', [stockDisponible - stockRestante, producto_id]);
+                await client.query('COMMIT');
+            } catch (e) {
+                await client.query('ROLLBACK');
+                return res.status(500).json({ error: e.message });
+            } finally {
+                client.release();
+            }
+            res.json({ message: 'Asignación ejecutada', asignaciones });
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
